@@ -1,0 +1,12 @@
+name: Demo-Sales-Price-Esclation
+title: Demo-Sales-Price-Esclation
+username: pulsefundgo
+account: pulsefundgo
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 13435723
+bundleId: 9408678
+url: https://pulsefundgo.shinyapps.io/Demo-Sales-Price-Esclation/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

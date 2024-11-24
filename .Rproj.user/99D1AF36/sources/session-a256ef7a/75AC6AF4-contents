@@ -1,0 +1,169 @@
+# Install necessary packages if you don't have them
+# install.packages(c("shiny", "DT", "ggplot2", "shinyjs", "shinyFeedback", "shinydashboard", "png"))
+
+library(shiny)
+library(DT)
+library(ggplot2)
+library(shinyjs)
+library(shinyFeedback)
+library(shinydashboard)
+library(grid)
+library(shinyalert)
+library(png)
+
+# Sample data for the table
+sample_data <- data.frame(
+  Product = c("A", "B", "C","D","DD","FF","H"),
+  Price = c(100, 150, 200,300,400,500,700),
+  Quantity = c(10, 20, 15,45,78,98,89),
+  stringsAsFactors = FALSE
+)
+
+# UI definition using shinydashboard
+ui <- dashboardPage(
+  dashboardHeader(title = "Sales Price Escalation Project"),
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Sales Escalation Report", tabName = "report"),
+      menuItem("General Tasks", tabName = "tasks"),
+      menuItem("Reactive Graph", tabName = "graph")
+    )
+  ),
+  
+  dashboardBody(
+    useShinyjs(),  # Enable JavaScript in UI
+    useShinyFeedback(),  # Enable feedback
+    tabItems(
+      # First Tab: Sales Escalation Report
+      tabItem(
+        tabName = "report",
+        h4("Sales Price Escalation Report"),
+        selectInput("month", "Choose Month:", choices = c("Month1", "Month2", "Month3")),
+        actionButton("showButton", "Show/Hide Plot", class = "btn btn-primary"),
+        plotOutput("plot1"),
+        downloadButton("downloadPlot", "Download Plot")
+      ),
+      
+      # Second Tab: General Tasks (Data Table)
+      tabItem(
+        tabName = "tasks",
+        h4("Data Table with Sales Data"),
+        DTOutput("dataTable"),
+        actionButton("saveData", "Save Data", class = "btn btn-success")
+      ),
+      
+      # Third Tab: Reactive Graph (File Upload and Cache)
+      tabItem(
+        tabName = "graph",
+        h4("Upload and Render Graph"),
+        fileInput("fileUpload", "Upload a Graph", accept = c("image/png", "image/jpeg")),
+        plotOutput("uploadedPlot"),
+        downloadButton("downloadCache", "Download Uploaded Plot")
+      )
+    )
+  )
+)
+
+# Server function
+server <- function(input, output, session) {
+  
+  # Create the reactive data object
+  sales_data <- reactiveVal(sample_data)
+  observe({
+    req(input$month)
+    if (input$month == "Month1") {
+      hide("plot1")
+    } else {
+      show("plot1")
+    }
+  })
+  
+  # Sales Escalation Report Plot
+  output$plot1 <- renderPlot({
+    req(input$month)
+    ggplot(sales_data(), aes(x = Product, y = Price)) +
+      geom_bar(stat = "identity", fill = "skyblue") +
+      theme_minimal() +
+      labs(title = paste(input$month, "Sales Price Escalation Report"), x = "Product", y = "Price")
+  })
+  
+  # Download the plot as an image
+  output$downloadPlot <- downloadHandler(
+    filename = function() {
+      paste("sales_report_", Sys.Date(), ".png", sep = "")
+    },
+    content = function(file) {
+      ggsave(file, plot = last_plot(), device = "png")
+    }
+  )
+  
+  # Show/Hide plot based on month selection
+  observe({
+    req(input$month)
+    if (input$month == "Month1") {
+      hide("plot1")
+    } else {
+      show("plot1")
+    }
+  })
+  
+  # Data Table with edit, update, and insert capabilities
+  output$dataTable <- renderDT({
+    datatable(
+      sales_data(), 
+      editable = TRUE, 
+      options = list(pageLength = 3)  # Pagination: 3 records per page
+    )
+  })
+  
+  # Watch for changes in the table cells
+  observeEvent(input$dataTable_cell_edit, {
+    info <- input$dataTable_cell_edit
+    str(info)
+    
+    # Editing Data Table - Update Sales Data Reactively
+    i <- info$row
+    j <- info$col
+    v <- info$value
+    new_data <- sales_data()
+    
+    if (j == 2 && v == "") {  # If Price column is empty
+      showFeedbackDanger("dataTable", text = "Price cannot be empty")
+      shinyalert::shinyalert("Error", "Price value is required!", type = "error")
+    } else {
+      new_data[i, j] <- v
+      sales_data(new_data)
+    }
+  })
+  
+  # Save the updated data on button click
+  observeEvent(input$saveData, {
+    write.csv(sales_data(), "updated_sales_data.csv")
+    showFeedbackSuccess("saveData", text = "Data saved successfully")
+  })
+  
+  # File Upload for Tab 3: Render Uploaded Graph
+  uploaded_graph <- reactive({
+    req(input$fileUpload)
+    img <- readPNG(input$fileUpload$datapath)
+    grid::grid.raster(img)
+  })
+  
+  # Render the uploaded plot
+  output$uploadedPlot <- renderPlot({
+    uploaded_graph()
+  })
+  
+  # Download the uploaded plot
+  output$downloadCache <- downloadHandler(
+    filename = function() {
+      paste("uploaded_sales_report_", Sys.Date(), ".png", sep = "")
+    },
+    content = function(file) {
+      ggsave(file, plot = uploaded_graph(), device = "png")
+    }
+  )
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)

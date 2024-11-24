@@ -1,0 +1,139 @@
+# Load libraries
+library(shiny)
+library(DT)
+library(ggplot2)
+library(shinyjs)
+library(shinyFeedback)
+library(shinydashboard)
+library(grid)
+library(shinyalert)
+library(png)
+library(plotly)
+
+# Load the module
+source("D:/All JOB D/2024-D-job/Interview Prep 2024/Rshiny-remote-role/Demo-3/module.R")  # Ensure this file path is correct
+
+# Sample data for the table
+sample_data <- data.frame(
+  Product = c("A", "B", "C", "D", "DD", "FF", "H"),
+  Price = c(100, 150, 200, 300, 400, 500, 700),
+  Quantity = c(10, 20, 15, 45, 78, 98, 89),
+  stringsAsFactors = FALSE
+)
+
+# UI definition using shinydashboard
+ui <- dashboardPage(
+  dashboardHeader(title = "Sales Price Escalation Project"),
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("README", tabName = "readme"),
+      menuItem("Sales Escalation Report", tabName = "report"),
+      menuItem("General Tasks", tabName = "tasks"),
+      menuItem("Reactive Graph", tabName = "graph")
+    )
+  ),
+  dashboardBody(
+    useShinyjs(),  # Enable JavaScript in UI
+    useShinyFeedback(),  # Enable feedback
+    tabItems(
+      # README Tab
+      tabItem(
+        tabName = "readme",
+        h2("README"),
+        p("This project demonstrates a system to handle sales price escalation."),
+        p("When invoices are raised, prices are recorded as initial values (X). Over time, market factors may cause these prices to change, and the updated prices are escalated to the customer during delivery."),
+        h3("Features Demonstrated"),
+        tags$ul(
+          tags$li("Modularized Code Structure: Clean and reusable code components."),
+          tags$li("Interactive JavaScript and jQuery Integration: Enhancing user interactivity."),
+          tags$li("Caching Mechanisms: Optimized data handling for better performance."),
+          tags$li("File Upload and Download: Simplified file management within the app."),
+          tags$li("Reactive Graphs: Use of reactive graph to improve performance just a plot is added for demo.")
+        ),
+        
+      ),
+      # Sales Escalation Report Tab
+      tabItem(
+        tabName = "report",
+        h4("Sales Price Escalation Report"),
+        appModuleUI("sales_report")
+      ),
+      # General Tasks Tab
+      tabItem(
+        tabName = "tasks",
+        h4("Data Table with Sales Data"),
+        DTOutput("dataTable"),
+        actionButton("saveData", "Save Data", class = "btn btn-success")
+      ),
+      # Reactive Graph Tab
+      tabItem(
+        tabName = "graph",
+        h4("Upload and Render Graph"),
+        fileInput("fileUpload", "Upload a Graph", accept = c("image/png", "image/jpeg")),
+        plotOutput("uploadedPlot"),
+        downloadButton("downloadCache", "Download Uploaded Plot")
+      )
+    )
+    
+  )
+)
+
+
+# Server function
+server <- function(input, output, session) {
+  
+  # Call the modularized server function
+  callModule(appModuleServer, "sales_report")
+  
+  # Reactive sales data
+  sales_data <- reactiveVal(sample_data)
+  
+  # Render data table
+  output$dataTable <- renderDT({
+    datatable(
+      sales_data(), 
+      editable = TRUE, 
+      options = list(pageLength = 3)
+    )
+  })
+  
+  # Handle data table edits
+  observeEvent(input$dataTable_cell_edit, {
+    info <- input$dataTable_cell_edit
+    new_data <- sales_data()
+    new_data[info$row, info$col] <- info$value
+    sales_data(new_data)
+  })
+  
+  # Save data to a CSV file
+  observeEvent(input$saveData, {
+    write.csv(sales_data(), "D:/All JOB D/2024-D-job/Interview Prep 2024/Rshiny-remote-role/Demo-3/updated_sales_data.csv", row.names = FALSE)
+    showFeedbackSuccess(inputId = "saveData", text = "Data saved successfully!")
+  })
+  
+  # Handle file upload and render graph
+  uploaded_graph <- reactive({
+    req(input$fileUpload)
+    img <- readPNG(input$fileUpload$datapath)
+    grid::rasterGrob(img)
+  })
+  
+  output$uploadedPlot <- renderPlot({
+    grid.draw(uploaded_graph())
+  })
+  
+  output$downloadCache <- downloadHandler(
+    filename = function() {
+      paste("uploaded_sales_report_", Sys.Date(), ".png", sep = "")
+    },
+    content = function(file) {
+      png(file)
+      grid.draw(uploaded_graph())
+      dev.off()
+    }
+  )
+  
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
